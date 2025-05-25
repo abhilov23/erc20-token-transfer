@@ -18,9 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body  >
-        <Providers> 
-          <Header/>
+      <body className="scrollbar-hidden">
+        <Providers>
+          <Header />
           <>{children}</>
         </Providers>
       </body>
