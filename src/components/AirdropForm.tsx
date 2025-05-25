@@ -21,18 +21,7 @@ export default function AirdropForm() {
   const { data: hash, isPending, writeContractAsync } = useWriteContract();
 
   // Add chain validation function
-  async function ensureCorrectChain() {
-    if (chainId !== anvil.id) {
-      try {
-        await switchChain({ chainId: anvil.id });
-        // Wait a moment for the chain switch to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.error("Failed to switch to Anvil chain:", error);
-        throw new Error("Please manually switch to Anvil Local network (Chain ID: 31337)");
-      }
-    }
-  }
+  
 
   async function getApprovedAmount(tSenderAddress: string | null): Promise<bigint> {
     if (!address) {
@@ -69,7 +58,6 @@ export default function AirdropForm() {
   async function handleAirdrop() {
     try {
       // CRITICAL FIX: Ensure we're on the correct chain before any transactions
-      await ensureCorrectChain();
       
       // Re-check chainId after potential switch
       const currentChainId = chainId;
@@ -147,14 +135,14 @@ export default function AirdropForm() {
         <h2 className="text-xl font-semibold text-gray-800">Airdrop Form</h2>
         
         {/* Add chain status indicator */}
-        <div className="p-3 bg-gray-50 rounded-lg border">
+        {/* <div className="p-3 bg-gray-50 rounded-lg border">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600">Current Chain:</span>
             <span className={`font-mono text-sm ${chainId === anvil.id ? 'text-green-600' : 'text-red-600'}`}>
               {chainId === anvil.id ? '✅ Anvil Local (31337)' : `❌ Chain ${chainId} (Switch to Anvil)`}
             </span>
           </div>
-        </div>
+        </div> */}
 
         <InputField
           label="Token Address"
@@ -199,14 +187,13 @@ export default function AirdropForm() {
           className={`mt-4 px-4 py-2 rounded-lg transition font-semibold ${
             isPending 
               ? 'bg-gray-400 cursor-not-allowed' 
-              : chainId === anvil.id 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                : 'bg-orange-600 hover:bg-orange-700 text-white'
+              : 'bg-blue-600 hover:bg-blue-700 text-white' 
+                
           }`}
           onClick={handleAirdrop}
           disabled={isPending}
         >
-          {isPending ? 'Processing...' : chainId === anvil.id ? 'Send Tokens' : 'Switch to Anvil & Send'}
+          {isPending ? 'Processing...' : 'Send Tokens' }
         </button>
       </div>
     </div>

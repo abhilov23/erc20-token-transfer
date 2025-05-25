@@ -11,7 +11,7 @@ export default function Header() {
     <header className="bg-white shadow-md top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         {/* Logo */}
-        <div className="text-2xl font-bold text-indigo-600 cursor-pointer">
+        <div className="text-2xl font-bold text-blue-700 cursor-pointer">
           TSender
         </div>
 

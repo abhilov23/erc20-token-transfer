@@ -2,12 +2,12 @@
 
 import {getDefaultConfig} from "@rainbow-me/rainbowkit";
 
-import {anvil, zksync, mainnet, sepolia} from "wagmi/chains";
+import {anvil, mainnet, sepolia, arbitrum} from "wagmi/chains";
 
 
 export default getDefaultConfig({
     appName: "TSender",
     projectId: "0def2c77d9fbcd72c75f297fe7039b62",  //WalletId
-    chains: [anvil, zksync, mainnet, sepolia],
+    chains: [anvil,  mainnet, sepolia, arbitrum],
     ssr: false
 })
