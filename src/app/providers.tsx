@@ -7,6 +7,8 @@ import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
+import "@rainbow-me/rainbowkit/styles.css";
+
 
 
 export function Providers(props: { children: ReactNode }) {
