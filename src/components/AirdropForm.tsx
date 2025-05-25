@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import InputField from "./ui/InputField";
 import { chainsToTSender, tsenderAbi, erc20Abi } from "@/constants";
-import { useChainId, useConfig, useAccount, useWriteContract } from "wagmi";
+import { useChainId, useConfig, useAccount, useWriteContract, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt } from "@wagmi/core";
 import { isAddress } from "viem";
 import { calculateTotal } from "@/utils/calculateTotal/calculateTotal";
-
+import { anvil } from "wagmi/chains";
 
 export default function AirdropForm() {
   const [tokenAddress, setTokenAddress] = useState("");
@@ -16,9 +16,23 @@ export default function AirdropForm() {
   const chainId = useChainId();
   const config = useConfig();
   const { address } = useAccount();
-  const total:number = useMemo(()=> calculateTotal(amount), [amount])
-  const {data: hash, isPending, writeContractAsync} = useWriteContract();
+  const { switchChain } = useSwitchChain();
+  const total: number = useMemo(() => calculateTotal(amount), [amount]);
+  const { data: hash, isPending, writeContractAsync } = useWriteContract();
 
+  // Add chain validation function
+  async function ensureCorrectChain() {
+    if (chainId !== anvil.id) {
+      try {
+        await switchChain({ chainId: anvil.id });
+        // Wait a moment for the chain switch to complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.error("Failed to switch to Anvil chain:", error);
+        throw new Error("Please manually switch to Anvil Local network (Chain ID: 31337)");
+      }
+    }
+  }
 
   async function getApprovedAmount(tSenderAddress: string | null): Promise<bigint> {
     if (!address) {
@@ -53,68 +67,95 @@ export default function AirdropForm() {
   }
 
   async function handleAirdrop() {
-    const tSenderAddress = chainsToTSender[chainId]?.tsender;
+    try {
+      // CRITICAL FIX: Ensure we're on the correct chain before any transactions
+      await ensureCorrectChain();
+      
+      // Re-check chainId after potential switch
+      const currentChainId = chainId;
+      const tSenderAddress = chainsToTSender[currentChainId]?.tsender;
 
-    const approvedAmount = await getApprovedAmount(tSenderAddress);
+      if (!tSenderAddress) {
+        alert(`TSender contract not found for chain ID: ${currentChainId}. Make sure you're on Anvil (31337).`);
+        return;
+      }
 
-    // Add next steps here:
-    // - Check if `approvedAmount >= amount`
-    // - If not, call approve()
-    // - Then, call your airdrop smart contract function
-     
-    if(approvedAmount < total){
-       const approvalHash = await writeContractAsync({
-        abi: erc20Abi,
-        address: tokenAddress as `0x${string}`,
-        functionName:"approve",
-        args:[tSenderAddress as `0x${string}`, BigInt(total)]
-       })
-       
-       const approvalReceipt = await waitForTransactionReceipt(config, {
-        hash:approvalHash
-      });
+      console.log(`Using TSender address: ${tSenderAddress} on chain: ${currentChainId}`);
 
-      console.log("approval confirmed:", approvalReceipt);
+      const approvedAmount = await getApprovedAmount(tSenderAddress);
 
-       await writeContractAsync({
-                abi: tsenderAbi,
-                address: tSenderAddress as `0x${string}`,
-                functionName: "airdropERC20",
-                args: [
-                    tokenAddress,
-                    // Comma or new line separated
-                    recipients.split(/[,\n]+/).map(addr => addr.trim()).filter(addr => addr !== ''),
-                    amount.split(/[,\n]+/).map(amt => amt.trim()).filter(amt => amt !== ''),
-                    BigInt(total),
-                ],
-            },)
+      if (approvedAmount < total) {
+        console.log("Insufficient allowance, requesting approval...");
+        
+        const approvalHash = await writeContractAsync({
+          abi: erc20Abi,
+          address: tokenAddress as `0x${string}`,
+          functionName: "approve",
+          args: [tSenderAddress as `0x${string}`, BigInt(total)]
+        });
 
-    } else {
-      await writeContractAsync({
-                abi: tsenderAbi,
-                address: tSenderAddress as `0x${string}`,
-                functionName: "airdropERC20",
-                args: [
-                    tokenAddress,
-                    // Comma or new line separated
-                    recipients.split(/[,\n]+/).map(addr => addr.trim()).filter(addr => addr !== ''),
-                    amount.split(/[,\n]+/).map(amt => amt.trim()).filter(amt => amt !== ''),
-                    BigInt(total),
-                ],
-            },)
+        console.log("Approval transaction hash:", approvalHash);
+
+        const approvalReceipt = await waitForTransactionReceipt(config, {
+          hash: approvalHash
+        });
+
+        console.log("Approval confirmed:", approvalReceipt);
+
+        // Execute airdrop after approval
+        const airdropHash = await writeContractAsync({
+          abi: tsenderAbi,
+          address: tSenderAddress as `0x${string}`,
+          functionName: "airdropERC20",
+          args: [
+            tokenAddress,
+            recipients.split(/[,\n]+/).map(addr => addr.trim()).filter(addr => addr !== ''),
+            amount.split(/[,\n]+/).map(amt => amt.trim()).filter(amt => amt !== ''),
+            BigInt(total),
+          ],
+        });
+
+        console.log("Airdrop transaction hash:", airdropHash);
+        
+      } else {
+        console.log("Sufficient allowance, executing airdrop...");
+        
+        const airdropHash = await writeContractAsync({
+          abi: tsenderAbi,
+          address: tSenderAddress as `0x${string}`,
+          functionName: "airdropERC20",
+          args: [
+            tokenAddress,
+            recipients.split(/[,\n]+/).map(addr => addr.trim()).filter(addr => addr !== ''),
+            amount.split(/[,\n]+/).map(amt => amt.trim()).filter(amt => amt !== ''),
+            BigInt(total),
+          ],
+        });
+
+        console.log("Airdrop transaction hash:", airdropHash);
+      }
+
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      alert(`Transaction failed: ${error}`);
     }
-
-
-   // if(result < total-amount needed)
-   
-
-
   }
 
   return (
     <div className="p-8 bg-gray-100">
       <div className="flex flex-col gap-4 p-6 bg-white rounded-lg shadow-md">
         <h2 className="text-xl font-semibold text-gray-800">Airdrop Form</h2>
+        
+        {/* Add chain status indicator */}
+        <div className="p-3 bg-gray-50 rounded-lg border">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Current Chain:</span>
+            <span className={`font-mono text-sm ${chainId === anvil.id ? 'text-green-600' : 'text-red-600'}`}>
+              {chainId === anvil.id ? '✅ Anvil Local (31337)' : `❌ Chain ${chainId} (Switch to Anvil)`}
+            </span>
+          </div>
+        </div>
+
         <InputField
           label="Token Address"
           placeholder="0x..."
@@ -155,10 +196,17 @@ export default function AirdropForm() {
         </div>
 
         <button
-          className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          className={`mt-4 px-4 py-2 rounded-lg transition font-semibold ${
+            isPending 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : chainId === anvil.id 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-orange-600 hover:bg-orange-700 text-white'
+          }`}
           onClick={handleAirdrop}
+          disabled={isPending}
         >
-          <span className="font-semibold">Send Tokens</span>
+          {isPending ? 'Processing...' : chainId === anvil.id ? 'Send Tokens' : 'Switch to Anvil & Send'}
         </button>
       </div>
     </div>
